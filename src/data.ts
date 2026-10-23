@@ -1,5 +1,6 @@
+export type EvidenceStatus = "public-evidence" | "configured" | "reachable" | "verified-live" | "degraded" | "unknown" | "not-authorized";
 export type CheckState = "reachable" | "degraded" | "unknown";
-export type DisplayState = CheckState | "unknown" | "not-authorized" | "verified-live";
+export type DisplayState = EvidenceStatus;
 
 export interface RepositoryRecord {
   id: number;
@@ -48,16 +49,48 @@ export interface HomepageSnapshot {
   checks: HomepageCheck[];
 }
 
-export interface DashboardRepository extends RepositoryRecord {
+export interface EvidenceRecord {
+  status: EvidenceStatus;
+  source: string | null;
+  observedAt: string | null;
+  note: string;
+}
+
+export interface DashboardBoundary {
+  apiBoundary: EvidenceRecord;
+  repositoryInventory: EvidenceRecord;
+  homepageProbes: EvidenceRecord;
+  privateRepositories: EvidenceRecord;
+  actionsRuns: EvidenceRecord;
+  deploymentMetadata: EvidenceRecord;
+  webhookDeliveryHistory: EvidenceRecord;
+  runtimeHealth: EvidenceRecord;
+  serviceVerification: EvidenceRecord;
+}
+
+export interface DashboardApiRepository extends RepositoryRecord {
+  repositoryEvidence: EvidenceRecord;
+  homepageEvidence: EvidenceRecord | null;
+  homepageCheck: HomepageCheck | null;
+}
+
+export interface DashboardApiResponse {
+  boundary: DashboardBoundary;
+  inventory: RepositoryInventory;
+  snapshot: HomepageSnapshot;
+  repositories: DashboardApiRepository[];
+}
+
+export interface DashboardRepository extends DashboardApiRepository {
   safeHomepage: string;
-  homepageCheck?: HomepageCheck;
-  displayState: DisplayState | "no-homepage";
+  displayState: CheckState | "no-homepage";
   operationalCandidate: boolean;
   candidateEvidence: "declared-homepage" | "metadata-match" | null;
   familyKey: string;
 }
 
 export interface DashboardData {
+  boundary: DashboardBoundary;
   inventory: RepositoryInventory;
   snapshot: HomepageSnapshot;
   repositories: DashboardRepository[];
@@ -91,50 +124,49 @@ export function normalizeFamilyName(name: string): string {
   return normalized || name.toLowerCase();
 }
 
-export function displayCheckState(check?: HomepageCheck): DisplayState | "no-homepage" {
-  if (!check) return "no-homepage";
-  if (check.httpStatus === 429) return "unknown";
-  if (check.httpStatus !== null && check.httpStatus >= 300 && check.httpStatus < 400) return "reachable";
-  return check.status;
+export function displayCheckState(check?: HomepageCheck | null): CheckState | "no-homepage" {
+  return check?.status ?? "no-homepage";
 }
 
 export async function loadDashboardData(): Promise<DashboardData> {
-  const [inventoryResponse, snapshotResponse] = await Promise.all([
-    fetch("/data/inventory.json"),
-    fetch("/data/homepage-checks.json"),
-  ]);
-  if (!inventoryResponse.ok || !snapshotResponse.ok) {
-    throw new Error("Could not load the bundled public-evidence snapshot.");
+  const response = await fetch("/api/dashboard", { headers: { Accept: "application/json" } });
+  if (!response.ok) {
+    throw new Error("Could not load the server-backed public-evidence snapshot.");
   }
 
-  const [inventory, snapshot] = await Promise.all([
-    inventoryResponse.json() as Promise<RepositoryInventory>,
-    snapshotResponse.json() as Promise<HomepageSnapshot>,
-  ]);
-  const checks = new Map(snapshot.checks.map((check) => [sanitizeHomepage(check.url), check]));
-  const repositories = inventory.repositories.map((repository): DashboardRepository => {
-    const safeHomepage = sanitizeHomepage(repository.homepage);
-    const homepageCheck = safeHomepage ? checks.get(safeHomepage) : undefined;
-    const searchableMetadata = [repository.name, repository.description, ...repository.topics].join(" ");
+  const payload = await response.json() as DashboardApiResponse;
+  if (!payload.inventory || !payload.snapshot || !payload.boundary || !Array.isArray(payload.repositories)) {
+    throw new Error("The server returned an invalid evidence envelope.");
+  }
+
+  const repositories = payload.repositories.map((record): DashboardRepository => {
+    const safeHomepage = sanitizeHomepage(record.homepage);
+    const searchableMetadata = [record.name, record.description, ...record.topics].join(" ");
     const candidateEvidence = safeHomepage
       ? "declared-homepage"
       : candidatePattern.test(searchableMetadata)
         ? "metadata-match"
         : null;
 
+    const homepageStatus = record.homepageEvidence?.status;
+    const displayState: CheckState | "no-homepage" = !safeHomepage
+      ? "no-homepage"
+      : homepageStatus === "reachable" || homepageStatus === "degraded" || homepageStatus === "unknown"
+        ? homepageStatus
+        : "unknown";
+
     return {
-      ...repository,
+      ...record,
       homepage: safeHomepage,
       safeHomepage,
-      homepageCheck,
-      displayState: displayCheckState(homepageCheck),
+      displayState,
       operationalCandidate: candidateEvidence !== null,
       candidateEvidence,
-      familyKey: normalizeFamilyName(repository.name),
+      familyKey: normalizeFamilyName(record.name),
     };
   });
 
-  return { inventory, snapshot, repositories };
+  return { ...payload, repositories };
 }
 
 export function groupRepositoryFamilies(repositories: DashboardRepository[]) {
@@ -167,8 +199,6 @@ export function repositoryPriority(a: DashboardRepository, b: DashboardRepositor
     unknown: 1,
     reachable: 2,
     "no-homepage": 3,
-    "not-authorized": 4,
-    "verified-live": 5,
   };
   const stateOrder = rank[a.displayState] - rank[b.displayState];
   if (stateOrder !== 0) return stateOrder;

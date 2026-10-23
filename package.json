@@ -7,7 +7,9 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit --pretty false",
-    "preview": "vite preview --host 0.0.0.0"
+    "test": "bun test",
+    "preview": "vite preview --host 0.0.0.0",
+    "start": "bun run server.ts"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
@@ -18,6 +20,8 @@
     "lucide-react": "latest"
   },
   "devDependencies": {
+    "@types/bun": "^1.4.4",
+    "@types/node": "^26.6.5",
     "@types/react": "latest",
     "@types/react-dom": "latest"
   }

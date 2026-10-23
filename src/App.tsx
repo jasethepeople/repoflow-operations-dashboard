@@ -89,16 +89,25 @@ function prettyNumber(value: number) {
 }
 
 function statusCopy(status: DisplayState | "no-homepage") {
+  if (status === "public-evidence") return "Public evidence";
+  if (status === "configured") return "Configured";
   if (status === "reachable") return "Reachable at snapshot";
   if (status === "degraded") return "Degraded · HTTP response";
-  if (status === "unknown") return "Unknown · rate limited";
+  if (status === "unknown") return "Unknown";
   if (status === "not-authorized") return "Not authorized";
   if (status === "verified-live") return "Verified live";
   return "No homepage declared";
 }
 
 function StatusTag({ status, compact = false }: { status: DisplayState | "no-homepage"; compact?: boolean }) {
-  const icon = status === "reachable" ? <span className="status-dot" /> : status === "degraded" ? <ArrowDownRight size={12} /> : status === "unknown" ? <CircleHelp size={12} /> : status === "verified-live" ? <ShieldCheck size={12} /> : status === "not-authorized" ? <LockKeyhole size={12} /> : <span className="status-dash">—</span>;
+  const icon = status === "reachable" ? <span className="status-dot" />
+    : status === "degraded" ? <ArrowDownRight size={12} />
+      : status === "unknown" ? <CircleHelp size={12} />
+        : status === "verified-live" ? <ShieldCheck size={12} />
+          : status === "not-authorized" ? <LockKeyhole size={12} />
+            : status === "public-evidence" ? <BookOpen size={12} />
+              : status === "configured" ? <Settings2 size={12} />
+                : <span className="status-dash">—</span>;
   const label = status === "reachable" && compact ? "Reachable" : statusCopy(status);
   return <span className={`status-tag status-${status}`}>{icon}<span>{label}</span></span>;
 }
@@ -128,7 +137,8 @@ function RepositoryTable({
             <th>Repository</th>
             <th>Account</th>
             <th>Language</th>
-            <th>Evidence</th>
+            <th>Repository source</th>
+            <th>Homepage state</th>
             <th>Last push</th>
             <th aria-label="Open detail" />
           </tr>
@@ -142,12 +152,13 @@ function RepositoryTable({
               </td>
               <td><span className="account-label">{repository.owner}</span></td>
               <td><span className="language-cell"><span className="language-dot" />{repository.language || "Unspecified"}</span></td>
+              <td><StatusTag status={repository.repositoryEvidence.status} compact /></td>
               <td><StatusTag status={repository.displayState} compact /></td>
               <td className="mono muted-cell">{shortDate(repository.pushedAt)}</td>
               <td><button className="icon-button row-open" aria-label={`Open ${repository.fullName}`} onClick={(event) => { event.stopPropagation(); onOpen(repository); }}><ExternalLink size={14} /></button></td>
             </tr>
           ))}
-          {repositories.length === 0 && <tr><td colSpan={6} className="empty-cell">No repositories match this instrument setting.</td></tr>}
+          {repositories.length === 0 && <tr><td colSpan={7} className="empty-cell">No repositories match this instrument setting.</td></tr>}
         </tbody>
       </table>
     </div>
@@ -265,7 +276,7 @@ function App() {
       <main className="main-canvas">
         <header className="topbar">
           <div className="breadcrumb"><span>Workspace</span><span className="breadcrumb-slash">/</span><strong>{selectedView.title}</strong></div>
-          <div className="topbar-actions"><span className="snapshot-indicator"><i /> STATIC SNAPSHOT</span><span className="avatar avatar-profile">JC</span></div>
+          <div className="topbar-actions"><span className="snapshot-indicator"><i /> SERVER API</span><StatusTag status={data.boundary.apiBoundary.status} compact /><span className="avatar avatar-profile">JC</span></div>
         </header>
 
         <nav className="mobile-nav" aria-label="Dashboard views">
@@ -382,9 +393,11 @@ function Overview({
 
         <div className="panel access-panel">
           <div className="panel-heading compact-heading"><div><div className="eyebrow"><span className="eyebrow-line" />INTEGRATION BOUNDARY</div><h2>Authorization gaps</h2></div><LockKeyhole size={15} className="muted-icon" /></div>
-          <div className="gap-row"><span>Private repositories</span><StatusTag status="not-authorized" compact /></div>
-          <div className="gap-row"><span>Actions & deployment</span><StatusTag status="not-authorized" compact /></div>
-          <div className="gap-row"><span>Webhook & live health</span><StatusTag status="not-authorized" compact /></div>
+          <div className="gap-row"><span>Private repositories</span><StatusTag status={data.boundary.privateRepositories.status} compact /></div>
+          <div className="gap-row"><span>Actions runs</span><StatusTag status={data.boundary.actionsRuns.status} compact /></div>
+          <div className="gap-row"><span>Deployment metadata</span><StatusTag status={data.boundary.deploymentMetadata.status} compact /></div>
+          <div className="gap-row"><span>Webhook history</span><StatusTag status={data.boundary.webhookDeliveryHistory.status} compact /></div>
+          <div className="gap-row"><span>Runtime health</span><StatusTag status={data.boundary.runtimeHealth.status} compact /></div>
           <button className="text-button gap-action" onClick={() => setView("repositories")}>Inspect public inventory <ArrowUpRight size={14} /></button>
         </div>
       </aside>
@@ -517,11 +530,12 @@ function RepositoryDrawer({ repository, onClose }: { repository: DashboardReposi
       <div className="drawer-owner"><GitBranch size={15} />{repository.owner}</div>
       <h2 id="drawer-title">{repository.name}</h2>
       <p className="drawer-description">{repository.description || "No public description provided."}</p>
-      <StatusTag status={repository.displayState} />
+      <div className="drawer-state-tags"><StatusTag status={repository.repositoryEvidence.status} /><StatusTag status={repository.displayState} /></div>
       <a className="drawer-primary-link" href={repository.url} target="_blank" rel="noreferrer">Open public repository <ExternalLink size={14} /></a>
       <div className="drawer-section"><div className="eyebrow"><span className="eyebrow-line" />REPOSITORY METADATA</div>
         <div className="detail-grid"><DetailItem label="PRIMARY LANGUAGE" value={repository.language || "Unspecified"} /><DetailItem label="BRANCH" value={repository.defaultBranch || "—"} /><DetailItem label="STARS" value={prettyNumber(repository.stars)} /><DetailItem label="FORKS" value={prettyNumber(repository.forks)} /><DetailItem label="CREATED" value={shortDate(repository.createdAt)} /><DetailItem label="LAST PUSH" value={shortDate(repository.pushedAt)} /></div>
         <div className="detail-row"><span>Repository type</span><span>{repository.isFork ? "Fork" : "Public repository"}{repository.archived ? " · archived" : ""}</span></div>
+        <div className="detail-row"><span>Metadata source</span><span>{repository.repositoryEvidence.source}</span></div>
       </div>
       <div className="drawer-section"><div className="eyebrow"><span className="eyebrow-line" />HOMEPAGE EVIDENCE</div>
         {repository.safeHomepage ? <><a className="homepage-link" href={repository.safeHomepage} target="_blank" rel="noreferrer">{repository.homepageCheck?.finalHost ?? new URL(repository.safeHomepage).host}<ExternalLink size={13} /></a>{check ? <div className="probe-detail"><div><span>HTTP STATUS</span><strong>{check.httpStatus ?? "—"}</strong></div><div><span>RESPONSE TIME</span><strong>{check.responseMs === null ? "—" : `${check.responseMs} ms`}</strong></div><div><span>CHECKED</span><strong>{snapshotTime(check.checkedAt)}</strong></div></div> : <p className="muted-copy">A homepage is declared, but no matching URL check appears in this snapshot.</p>}<p className="drawer-caveat">{check?.httpStatus === 429 ? "This destination rate-limited the public probe. Current reachability is unknown." : "Point-in-time public GET evidence only. This does not verify application behavior or service health."}</p></> : <p className="muted-copy">No homepage URL is declared in the public repository metadata.</p>}
