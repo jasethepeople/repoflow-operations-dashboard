@@ -129,9 +129,14 @@ export function displayCheckState(check?: HomepageCheck | null): CheckState | "n
 }
 
 export async function loadDashboardData(): Promise<DashboardData> {
-  const response = await fetch("/api/dashboard", { headers: { Accept: "application/json" } });
+  // Inside the Tauri shell there is no same-origin server, so the client
+  // loads the envelope baked at build time (scripts/build-dashboard-data.ts
+  // runs the same API handler and writes public/data/dashboard.json).
+  // On the web nothing changes: the live /api/dashboard boundary answers.
+  const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+  const response = await fetch(inTauri ? "/data/dashboard.json" : "/api/dashboard", { headers: { Accept: "application/json" } });
   if (!response.ok) {
-    throw new Error("Could not load the server-backed public-evidence snapshot.");
+    throw new Error("Could not load the public-evidence snapshot.");
   }
 
   const payload = await response.json() as DashboardApiResponse;

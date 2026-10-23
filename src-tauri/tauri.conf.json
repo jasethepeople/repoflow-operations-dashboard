@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "RepoFlow",
+  "version": "0.1.0",
+  "identifier": "com.jasethepeople.repoflow",
+  "build": {
+    "beforeDevCommand": "bun run build:dashboard-data && bun run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "bun run build:dashboard-data && bun run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "RepoFlow Operations Dashboard",
+        "width": 1280,
+        "height": 860,
+        "minWidth": 360,
+        "minHeight": 560
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Utility",
+    "shortDescription": "Public-evidence operations dashboard for two GitHub portfolios",
+    "icon": ["icons/icon.png"]
+  }
+}

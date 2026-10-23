@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit --pretty false",
     "test": "bun test",
     "preview": "vite preview --host 0.0.0.0",
-    "start": "bun run server.ts"
+    "start": "bun run server.ts",
+    "build:dashboard-data": "bun scripts/build-dashboard-data.ts"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
@@ -20,6 +21,7 @@
     "lucide-react": "latest"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2",
     "@types/bun": "^1.4.4",
     "@types/node": "^26.6.5",
     "@types/react": "latest",
